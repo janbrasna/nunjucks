@@ -1,4 +1,4 @@
-/*! Browser bundle of nunjucks 3.2.2  */
+/*! Browser bundle of nunjucks 3.2.4  */
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
 		module.exports = factory();
@@ -88,9 +88,10 @@ var escapeMap = {
   '"': '&quot;',
   '\'': '&#39;',
   '<': '&lt;',
-  '>': '&gt;'
+  '>': '&gt;',
+  '\\': '&#92;'
 };
-var escapeRegex = /[&"'<>]/g;
+var escapeRegex = /[&"'<>\\]/g;
 var exports = module.exports = {};
 
 function hasOwnProp(obj, k) {
@@ -295,6 +296,8 @@ function getAttrGetter(attribute) {
     return _item;
   };
 }
+
+exports.getAttrGetter = getAttrGetter;
 
 function groupBy(obj, val, throwOnUndefined) {
   var result = {};
@@ -651,7 +654,7 @@ var Frame =
 /*#__PURE__*/
 function () {
   function Frame(parent, isolateWrites) {
-    this.variables = {};
+    this.variables = Object.create(null);
     this.parent = parent;
     this.topLevel = false; // if this is true, writes (set) should never propagate upwards past
     // this frame to its parent (though reads may).
@@ -732,9 +735,7 @@ function () {
 }();
 
 function makeMacro(argNames, kwargNames, func) {
-  var _this = this;
-
-  return function () {
+  return function macro() {
     for (var _len = arguments.length, macroArgs = new Array(_len), _key = 0; _key < _len; _key++) {
       macroArgs[_key] = arguments[_key];
     }
@@ -770,7 +771,7 @@ function makeMacro(argNames, kwargNames, func) {
       args = macroArgs;
     }
 
-    return func.apply(_this, args);
+    return func.apply(this, args);
   };
 }
 
@@ -7085,14 +7086,21 @@ function sum(arr, attr, start) {
 }
 
 exports.sum = sum;
-exports.sort = r.makeMacro(['value', 'reverse', 'case_sensitive', 'attribute'], [], function (arr, reversed, caseSens, attr) {
+exports.sort = r.makeMacro(['value', 'reverse', 'case_sensitive', 'attribute'], [], function sortFilter(arr, reversed, caseSens, attr) {
+  var _this = this;
+
   // Copy it
   var array = lib.map(arr, function (v) {
     return v;
   });
+  var getAttribute = lib.getAttrGetter(attr);
   array.sort(function (a, b) {
-    var x = attr ? a[attr] : a;
-    var y = attr ? b[attr] : b;
+    var x = attr ? getAttribute(a) : a;
+    var y = attr ? getAttribute(b) : b;
+
+    if (_this.env.opts.throwOnUndefined && attr && (x === undefined || y === undefined)) {
+      throw new TypeError("sort: attribute \"" + attr + "\" resolved to undefined");
+    }
 
     if (!caseSens && lib.isString(x) && lib.isString(y)) {
       x = x.toLowerCase();
@@ -7266,13 +7274,15 @@ function float(val, def) {
 }
 
 exports.float = float;
+var intFilter = r.makeMacro(['value', 'default', 'base'], [], function doInt(value, defaultValue, base) {
+  if (base === void 0) {
+    base = 10;
+  }
 
-function int(val, def) {
-  var res = parseInt(val, 10);
-  return isNaN(res) ? def : res;
-}
-
-exports.int = int; // Aliases
+  var res = parseInt(value, base);
+  return isNaN(res) ? defaultValue : res;
+});
+exports.int = intFilter; // Aliases
 
 exports.d = exports.default;
 exports.e = exports.escape;
